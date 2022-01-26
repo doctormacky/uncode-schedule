@@ -15,7 +15,7 @@ import com.google.gson.GsonBuilder;
 
 public class ConsoleManager {
 	
-    protected static transient Logger log = LoggerFactory.getLogger(ConsoleManager.class);
+    protected static final Logger log = LoggerFactory.getLogger(ConsoleManager.class);
     
     private static Gson GSON = new GsonBuilder().create();
 

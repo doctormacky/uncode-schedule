@@ -32,18 +32,17 @@ import cn.uncode.schedule.zk.ZKManager;
  * 
  * @author juny.ye
  * 
+ * @author doctormacky (liuyunsh@cn.ibm.com)
+ * 
  */
 public class ZKScheduleManager extends ThreadPoolTaskScheduler implements ApplicationContextAware {
 
-	/**
-	 * 
-	 */
-	private static final long serialVersionUID = 1L;
+	private static final long serialVersionUID = 8881959751783074731L;
 
 	private static final transient Logger LOGGER = LoggerFactory.getLogger(ZKScheduleManager.class);
 
 	private Map<String, String> zkConfig;
-	
+
 	protected ZKManager zkManager;
 
 	private IScheduleDataManager scheduleDataManager;
@@ -69,14 +68,14 @@ public class ZKScheduleManager extends ThreadPoolTaskScheduler implements Applic
 	private boolean isScheduleServerRegister = false;
 
 	private static ApplicationContext applicationcontext;
-	
-	private Map<String, Boolean> isOwnerMap = new ConcurrentHashMap<String, Boolean>();
+
+	private Map<String, Boolean> isOwnerMap = new ConcurrentHashMap<>();
 
 	private Timer hearBeatTimer;
 	protected Lock initLock = new ReentrantLock();
 	protected boolean isStopSchedule = false;
 	protected Lock registerLock = new ReentrantLock();
-	
+
 	volatile String errorMessage = "No config Zookeeper connect infomation";
 	private InitialThread initialThread;
 
@@ -93,7 +92,7 @@ public class ZKScheduleManager extends ThreadPoolTaskScheduler implements Applic
 	}
 
 	public void reInit(Properties p) throws Exception {
-		if (this.start == true || this.hearBeatTimer != null) {
+		if (this.start || this.hearBeatTimer != null) {
 			throw new Exception("调度器有任务处理，不能重新初始化");
 		}
 		this.init(p);
@@ -110,8 +109,7 @@ public class ZKScheduleManager extends ThreadPoolTaskScheduler implements Applic
 				this.zkManager.close();
 			}
 			this.zkManager = new ZKManager(p);
-			this.errorMessage = "Zookeeper connecting ......"
-					+ this.zkManager.getConnectStr();
+			this.errorMessage = "Zookeeper connecting ......" + this.zkManager.getConnectStr();
 			initialThread = new InitialThread(this);
 			initialThread.setName("ScheduleManager-initialThread");
 			initialThread.start();
@@ -125,8 +123,7 @@ public class ZKScheduleManager extends ThreadPoolTaskScheduler implements Applic
 		try {
 			if (this.isStopSchedule == true) {
 				if (LOGGER.isDebugEnabled()) {
-					LOGGER.debug("外部命令终止调度,不在注册调度服务，避免遗留垃圾数据："
-							+ currenScheduleServer.getUuid());
+					LOGGER.debug("外部命令终止调度,不在注册调度服务，避免遗留垃圾数据：" + currenScheduleServer.getUuid());
 				}
 				return;
 			}
@@ -134,8 +131,7 @@ public class ZKScheduleManager extends ThreadPoolTaskScheduler implements Applic
 			if (errorMessage != null) {
 				this.currenScheduleServer.setDealInfoDesc(errorMessage);
 			}
-			if (this.scheduleDataManager
-					.refreshScheduleServer(this.currenScheduleServer) == false) {
+			if (this.scheduleDataManager.refreshScheduleServer(this.currenScheduleServer) == false) {
 				// 更新信息失败，清除内存数据后重新注册
 				this.clearMemoInfo();
 				this.scheduleDataManager.registerScheduleServer(this.currenScheduleServer);
@@ -158,8 +154,7 @@ public class ZKScheduleManager extends ThreadPoolTaskScheduler implements Applic
 	}
 
 	/**
-	 * 根据当前调度服务器的信息，重新计算分配所有的调度任务
-	 * 任务的分配是需要加锁，避免数据分配错误。为了避免数据锁带来的负面作用，通过版本号来达到锁的目的
+	 * 根据当前调度服务器的信息，重新计算分配所有的调度任务 任务的分配是需要加锁，避免数据分配错误。为了避免数据锁带来的负面作用，通过版本号来达到锁的目的
 	 * 
 	 * 1、获取任务状态的版本号 2、获取所有的服务器注册信息和任务队列信息 3、清除已经超过心跳周期的服务器注册信息 3、重新计算任务分配
 	 * 4、更新任务状态的版本号【乐观锁】 5、根系任务队列的分配信息
@@ -169,17 +164,15 @@ public class ZKScheduleManager extends ThreadPoolTaskScheduler implements Applic
 	public void assignScheduleTask() throws Exception {
 		scheduleDataManager.clearExpireScheduleServer();
 		List<String> serverList = scheduleDataManager.loadScheduleServerNames();
-		if (scheduleDataManager.isLeader(this.currenScheduleServer.getUuid(),
-				serverList) == false) {
+		if (scheduleDataManager.isLeader(this.currenScheduleServer.getUuid(), serverList) == false) {
 			if (LOGGER.isDebugEnabled()) {
-				LOGGER.debug(this.currenScheduleServer.getUuid()
-						+ ":不是负责任务分配的Leader,直接返回");
+				LOGGER.debug(this.currenScheduleServer.getUuid() + ":不是负责任务分配的Leader,直接返回");
 			}
 			return;
 		}
-		//黑名单
-		for(String ip:zkManager.getIpBlacklist()){
-			if(serverList.contains(ip)){
+		// 黑名单
+		for (String ip : zkManager.getIpBlacklist()) {
+			if (serverList.contains(ip)) {
 				serverList.remove(ip);
 			}
 		}
@@ -215,7 +208,7 @@ public class ZKScheduleManager extends ThreadPoolTaskScheduler implements Applic
 			}
 		}
 	}
-	
+
 	public void checkLocalTask() throws Exception {
 		// 检查系统任务执行情况
 		scheduleDataManager.checkLocalTask(this.currenScheduleServer.getUuid());
@@ -233,49 +226,48 @@ public class ZKScheduleManager extends ThreadPoolTaskScheduler implements Applic
 			// 注册调度管理器
 			this.scheduleDataManager.registerScheduleServer(this.currenScheduleServer);
 			if (hearBeatTimer == null) {
-				hearBeatTimer = new Timer("ScheduleManager-"
-						+ this.currenScheduleServer.getUuid() + "-HearBeat");
+				hearBeatTimer = new Timer("ScheduleManager-" + this.currenScheduleServer.getUuid() + "-HearBeat");
 			}
 			hearBeatTimer.schedule(new HeartBeatTimerTask(this), 2000, this.timerInterval);
 		}
 	}
-	
-	private Runnable taskWrapper(final Runnable task){
-		return new Runnable(){
-			public void run(){
-				ScheduledMethodRunnable scheduledMethodRunnable = (ScheduledMethodRunnable)task;
-		    	Method targetMethod = scheduledMethodRunnable.getMethod();
-		    	String[] beanNames = applicationcontext.getBeanNamesForType(targetMethod.getDeclaringClass());
-		    	if(null != beanNames && StringUtils.isNotEmpty(beanNames[0])){
-		    		String name = ScheduleUtil.getTaskNameFormBean(beanNames[0], targetMethod.getName());
-		    		boolean isOwner = false;
+
+	private Runnable taskWrapper(final Runnable task) {
+		return new Runnable() {
+			public void run() {
+				ScheduledMethodRunnable scheduledMethodRunnable = (ScheduledMethodRunnable) task;
+				Method targetMethod = scheduledMethodRunnable.getMethod();
+				String[] beanNames = applicationcontext.getBeanNamesForType(targetMethod.getDeclaringClass());
+				if (null != beanNames && StringUtils.isNotEmpty(beanNames[0])) {
+					String name = ScheduleUtil.getTaskNameFormBean(beanNames[0], targetMethod.getName());
+					boolean isOwner = false;
 					try {
-						if(isScheduleServerRegister == false){
+						if (!isScheduleServerRegister) {
 							Thread.sleep(1000);
 						}
-						if(zkManager.checkZookeeperState()){
+						if (zkManager.checkZookeeperState()) {
 							isOwner = scheduleDataManager.isOwner(name, currenScheduleServer.getUuid());
 							isOwnerMap.put(name, isOwner);
-						}else{
+						} else {
 							// 如果zk不可用，使用历史数据
-							if(null != isOwnerMap){
+							if (null != isOwnerMap) {
 								isOwner = isOwnerMap.get(name);
 							}
 						}
 					} catch (Exception e) {
 						LOGGER.error("Check task owner error.", e);
 					}
-		    		if(isOwner){
-		    			task.run();
-		    			LOGGER.info("Cron job has been executed.");
-		    		}
-		    	}
+					if (isOwner) {
+						task.run();
+						LOGGER.info("Cron job has been executed.");
+					}
+				}
 			}
 		};
 	}
 
 	class HeartBeatTimerTask extends java.util.TimerTask {
-		private transient final Logger log = LoggerFactory.getLogger(HeartBeatTimerTask.class);
+		private final Logger log = LoggerFactory.getLogger(HeartBeatTimerTask.class);
 		ZKScheduleManager manager;
 
 		public HeartBeatTimerTask(ZKScheduleManager aManager) {
@@ -293,7 +285,7 @@ public class ZKScheduleManager extends ThreadPoolTaskScheduler implements Applic
 	}
 
 	class InitialThread extends Thread {
-		private transient Logger log = LoggerFactory.getLogger(InitialThread.class);
+		private Logger log = LoggerFactory.getLogger(InitialThread.class);
 		ZKScheduleManager sm;
 
 		public InitialThread(ZKScheduleManager sm) {
@@ -314,13 +306,12 @@ public class ZKScheduleManager extends ThreadPoolTaskScheduler implements Applic
 				while (sm.zkManager.checkZookeeperState() == false) {
 					count = count + 1;
 					if (count % 50 == 0) {
-						sm.errorMessage = "Zookeeper connecting ......"
-								+ sm.zkManager.getConnectStr() + " spendTime:"
+						sm.errorMessage = "Zookeeper connecting ......" + sm.zkManager.getConnectStr() + " spendTime:"
 								+ count * 20 + "(ms)";
 						log.error(sm.errorMessage);
 					}
 					Thread.sleep(20);
-					if (this.isStop == true) {
+					if (this.isStop) {
 						return;
 					}
 				}
@@ -330,9 +321,7 @@ public class ZKScheduleManager extends ThreadPoolTaskScheduler implements Applic
 			} finally {
 				sm.initLock.unlock();
 			}
-
 		}
-
 	}
 
 	public IScheduleDataManager getScheduleDataManager() {
@@ -340,15 +329,14 @@ public class ZKScheduleManager extends ThreadPoolTaskScheduler implements Applic
 	}
 
 	@Override
-	public void setApplicationContext(ApplicationContext applicationcontext)
-			throws BeansException {
+	public void setApplicationContext(ApplicationContext applicationcontext) throws BeansException {
 		ZKScheduleManager.applicationcontext = applicationcontext;
 	}
-	
+
 	public void setZkManager(ZKManager zkManager) {
 		this.zkManager = zkManager;
 	}
-	
+
 	public ZKManager getZkManager() {
 		return zkManager;
 	}
@@ -356,34 +344,39 @@ public class ZKScheduleManager extends ThreadPoolTaskScheduler implements Applic
 	public void setZkConfig(Map<String, String> zkConfig) {
 		this.zkConfig = zkConfig;
 	}
-	
+
 	@Override
-    public ScheduledFuture<?> scheduleAtFixedRate(Runnable task, long period) {
-        return super.scheduleAtFixedRate(taskWrapper(task), period);
-    }
-	
+	public ScheduledFuture<?> scheduleAtFixedRate(Runnable task, long period) {
+		return super.scheduleAtFixedRate(taskWrapper(task), period);
+	}
+
+	@Override
 	public ScheduledFuture<?> schedule(Runnable task, Trigger trigger) {
 		return super.schedule(taskWrapper(task), trigger);
 	}
 
+	@Override
 	public ScheduledFuture<?> schedule(Runnable task, Date startTime) {
 		return super.schedule(taskWrapper(task), startTime);
 	}
 
+	@Override
 	public ScheduledFuture<?> scheduleAtFixedRate(Runnable task, Date startTime, long period) {
 		return super.scheduleAtFixedRate(taskWrapper(task), startTime, period);
 	}
 
+	@Override
 	public ScheduledFuture<?> scheduleWithFixedDelay(Runnable task, Date startTime, long delay) {
 		return super.scheduleWithFixedDelay(taskWrapper(task), startTime, delay);
 	}
 
+	@Override
 	public ScheduledFuture<?> scheduleWithFixedDelay(Runnable task, long delay) {
 		return super.scheduleWithFixedDelay(taskWrapper(task), delay);
 	}
-	
-	public String getScheduleServerUUid(){
-		if(null != currenScheduleServer){
+
+	public String getScheduleServerUUid() {
+		if (null != currenScheduleServer) {
 			return currenScheduleServer.getUuid();
 		}
 		return null;
@@ -396,8 +389,5 @@ public class ZKScheduleManager extends ThreadPoolTaskScheduler implements Applic
 	public static ApplicationContext getApplicationcontext() {
 		return ZKScheduleManager.applicationcontext;
 	}
-	
-	
-
 
 }
